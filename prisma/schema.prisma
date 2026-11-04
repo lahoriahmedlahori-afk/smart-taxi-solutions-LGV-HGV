@@ -1,0 +1,643 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../server/generated/postgres"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([roleId, permissionId])
+}
+
+model User {
+  id                     String                 @id @default(uuid())
+  email                  String                 @unique
+  name                   String
+  passwordHash           String
+  isActive               Boolean                @default(true)
+  failedLoginAttempts    Int                    @default(0)
+  lockedUntil            DateTime?
+  lastLoginAt            DateTime?
+  roleId                 String
+  role                   Role                   @relation(fields: [roleId], references: [id])
+  sessions               AuthSession[]
+  resetTokens            PasswordResetToken[]
+  assignedLeads          Lead[]                 @relation("LeadAssignee")
+  createdLeads           Lead[]                 @relation("LeadCreator")
+  createdConsultations   Consultation[]         @relation("ConsultationCreator")
+  createdCustomers       Customer[]             @relation("CustomerCreator")
+  notes                  Note[]
+  activities             Activity[]
+  assignedFollowUps      FollowUp[]             @relation("FollowUpAssignee")
+  quotes                 Quote[]
+  bookings               Booking[]             @relation("BookingCreator")
+  aiConversations        AiConversation[]
+  auditLogs              AuditLog[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  deletedAt              DateTime?
+}
+
+model AuthSession {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  lastSeenAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model Customer {
+  id                 String                 @id @default(uuid())
+  firstName          String?
+  lastName           String?
+  phone              String?
+  email              String?
+  postcode           String?
+  city               String?
+  dateOfBirth        DateTime?
+  contactPreference  String?
+  leadSource         String?
+  preferredLocation  String?
+  preferredDates     String?
+  budgetPence        Int?
+  paymentPreference  String?
+  createdById        String?
+  createdBy          User?                  @relation("CustomerCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  leads              Lead[]
+  consultations      Consultation[]
+  licences           CustomerLicence[]
+  medicalStatuses    MedicalStatus[]
+  theoryTests        TheoryTest[]
+  cpcStatuses        CpcStatus[]
+  trainingNeeds      TrainingRequirement[]
+  quotes             Quote[]
+  bookings           Booking[]
+  followUps          FollowUp[]
+  notes              Note[]
+  activities         Activity[]
+  documents          DocumentMetadata[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  deletedAt          DateTime?
+
+  @@index([email])
+  @@index([phone])
+  @@index([createdAt])
+}
+
+model Lead {
+  id             String        @id @default(uuid())
+  customerId     String
+  status         String        @default("New Lead")
+  source         String?
+  route          String?
+  estimatedPence Int?
+  assignedToId   String?
+  createdById    String?
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTo     User?         @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy      User?         @relation("LeadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  consultations  Consultation[]
+  quotes         Quote[]
+  bookings       Booking[]
+  followUps      FollowUp[]
+  activities     Activity[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  @@index([status, updatedAt])
+  @@index([assignedToId, status])
+  @@index([customerId])
+}
+
+model Consultation {
+  id             String                 @id @default(uuid())
+  customerId     String
+  leadId         String?
+  clientDraftKey String?                @unique
+  route          String?
+  status         String                 @default("In Progress")
+  currentStage   String                 @default("Customer details")
+  progress       Int                    @default(0)
+  callNotes      String?
+  createdById    String?
+  customer       Customer               @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  lead           Lead?                  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdBy      User?                  @relation("ConsultationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  answers        ConsultationAnswer[]
+  aiConversations AiConversation[]
+  activities     Activity[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  deletedAt      DateTime?
+
+  @@index([customerId, updatedAt])
+  @@index([leadId])
+}
+
+model ConsultationAnswer {
+  id             String       @id @default(uuid())
+  consultationId String
+  questionKey    String
+  answerJson     String
+  source          String       @default("ADVISER")
+  confirmed       Boolean      @default(true)
+  confirmedAt    DateTime?
+  createdById    String?
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([consultationId, questionKey])
+  @@index([questionKey])
+}
+
+model CustomerLicence {
+  id                  String    @id @default(uuid())
+  customerId          String
+  licenceType         String    @default("UK")
+  status              String?
+  issueDate           DateTime?
+  expiryDate          DateTime?
+  categoryBObtainedAt DateTime?
+  categoriesJson      String    @default("[]")
+  restrictions        String?
+  penaltyPoints       Int?
+  disqualification    String?
+  verificationStatus  String    @default("UNVERIFIED")
+  verifiedAt          DateTime?
+  createdById         String?
+  customer            Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([customerId, updatedAt])
+}
+
+model MedicalStatus {
+  id                 String    @id @default(uuid())
+  customerId         String
+  status             String    @default("UNKNOWN")
+  d4Completed        Boolean?
+  completedAt        DateTime?
+  provider           String?
+  customerReportedIssue String?
+  documentMetadataId String?
+  notes              String?
+  createdById        String?
+  customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([customerId, updatedAt])
+}
+
+model TheoryTest {
+  id             String    @id @default(uuid())
+  customerId     String
+  kind           String
+  status         String    @default("UNKNOWN")
+  scheduledAt    DateTime?
+  completedAt    DateTime?
+  result         String?
+  certificateRef String?
+  validUntil     DateTime?
+  createdById    String?
+  customer       Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([customerId, kind, status])
+}
+
+model CpcStatus {
+  id             String    @id @default(uuid())
+  customerId     String
+  qualification  String
+  status         String    @default("UNKNOWN")
+  module2Status  String?
+  module4Status  String?
+  periodicHours  Int?
+  validUntil     DateTime?
+  reference      String?
+  createdById    String?
+  customer       Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([customerId, qualification])
+}
+
+model TrainingRequirement {
+  id                String    @id @default(uuid())
+  customerId        String
+  category          String
+  requirement       String
+  status            String    @default("PENDING")
+  recommendedBand   String?
+  previousHours     Int?
+  previousExperience String?
+  confidence        String?
+  notes             String?
+  createdById       String?
+  customer          Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([customerId, status])
+}
+
+model Provider {
+  id                String           @id @default(uuid())
+  name              String
+  contactName       String?
+  email             String?
+  phone             String?
+  agreementStatus   String           @default("PENDING")
+  cancellationPolicy String?
+  paymentTerms      String?
+  commissionBasisPoints Int?
+  internalNotes     String?
+  centres           TrainingCentre[]
+  courses           Course[]
+  prices            PriceItem[]
+  quotes            Quote[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  @@index([name])
+}
+
+model TrainingCentre {
+  id             String    @id @default(uuid())
+  providerId     String
+  name           String
+  location       String
+  postcode       String?
+  categoriesJson String    @default("[]")
+  testElementsJson String  @default("[]")
+  contactDetails String?
+  internalNotes  String?
+  provider       Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  courses        Course[]
+  prices         PriceItem[]
+  quotes         Quote[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  @@index([location, postcode])
+  @@index([providerId])
+}
+
+model Course {
+  id              String         @id @default(uuid())
+  providerId      String
+  trainingCentreId String
+  category        String
+  courseName      String
+  startsAt        DateTime?
+  endsAt          DateTime?
+  capacity        Int?
+  placesAvailable Int?
+  status          String         @default("AVAILABLE")
+  retailPricePence Int?
+  provider        Provider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  trainingCentre  TrainingCentre @relation(fields: [trainingCentreId], references: [id], onDelete: Cascade)
+  bookings        Booking[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([category, startsAt, status])
+  @@index([trainingCentreId])
+}
+
+model PriceItem {
+  id               String          @id @default(uuid())
+  providerId       String
+  trainingCentreId String?
+  category         String?
+  itemCode         String
+  description      String
+  tradeCostPence   Int             @default(0)
+  vatBasisPoints   Int             @default(0)
+  testFeePence     Int             @default(0)
+  marginPence      Int             @default(0)
+  retailPricePence Int             @default(0)
+  depositPence     Int             @default(0)
+  isActive         Boolean         @default(true)
+  provider         Provider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  trainingCentre   TrainingCentre? @relation(fields: [trainingCentreId], references: [id], onDelete: SetNull)
+  quoteItems       QuoteItem[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([providerId, itemCode])
+  @@index([category, isActive])
+}
+
+model Quote {
+  id               String          @id @default(uuid())
+  customerId       String
+  leadId           String?
+  providerId       String?
+  trainingCentreId String?
+  createdById      String
+  status           String          @default("DRAFT")
+  currency         String          @default("GBP")
+  subtotalPence    Int             @default(0)
+  vatPence         Int             @default(0)
+  discountPence    Int             @default(0)
+  totalPence       Int             @default(0)
+  depositPence     Int             @default(0)
+  balancePence     Int             @default(0)
+  expiresAt        DateTime?
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  lead             Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  provider         Provider?       @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  trainingCentre   TrainingCentre? @relation(fields: [trainingCentreId], references: [id], onDelete: SetNull)
+  createdBy        User            @relation(fields: [createdById], references: [id])
+  items            QuoteItem[]
+  bookings         Booking[]
+  payments         Payment[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
+
+  @@index([customerId, status, createdAt])
+  @@index([leadId])
+}
+
+model QuoteItem {
+  id               String    @id @default(uuid())
+  quoteId          String
+  priceItemId      String?
+  description      String
+  quantity         Int       @default(1)
+  unitPricePence   Int
+  providerCostPence Int?
+  vatBasisPoints   Int       @default(0)
+  lineTotalPence   Int
+  quote            Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  priceItem        PriceItem? @relation(fields: [priceItemId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([quoteId])
+}
+
+model Booking {
+  id               String    @id @default(uuid())
+  customerId       String
+  leadId           String?
+  quoteId          String?
+  courseId         String?
+  createdById      String
+  status           String    @default("PREPARING")
+  startsAt         DateTime?
+  depositPence     Int       @default(0)
+  outstandingPence Int       @default(0)
+  bookingReference String?   @unique
+  notes            String?
+  customer         Customer  @relation(fields: [customerId], references: [id])
+  lead             Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  quote            Quote?    @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  course           Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy        User      @relation("BookingCreator", fields: [createdById], references: [id])
+  payments         Payment[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  @@index([customerId, status])
+  @@index([courseId, startsAt])
+}
+
+model Payment {
+  id              String    @id @default(uuid())
+  bookingId       String?
+  quoteId         String?
+  amountPence     Int
+  currency        String    @default("GBP")
+  status          String    @default("PENDING")
+  paymentMethod   String?
+  externalRef     String?
+  receivedAt      DateTime?
+  booking         Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  quote           Quote?    @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([bookingId, status])
+  @@index([quoteId, status])
+}
+
+model FollowUp {
+  id           String    @id @default(uuid())
+  customerId   String
+  leadId       String?
+  assignedToId String?
+  createdById  String?
+  reason       String
+  dueAt        DateTime
+  status       String    @default("OPEN")
+  notes        String?
+  completedAt  DateTime?
+  customer     Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  lead         Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  assignedTo   User?     @relation("FollowUpAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  @@index([assignedToId, status, dueAt])
+  @@index([customerId, dueAt])
+}
+
+model Note {
+  id          String    @id @default(uuid())
+  customerId  String
+  createdById String
+  body        String
+  isPrivate   Boolean   @default(false)
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([customerId, createdAt])
+}
+
+model Activity {
+  id             String        @id @default(uuid())
+  customerId     String?
+  leadId         String?
+  consultationId String?
+  actorId        String?
+  type           String
+  summary        String
+  metadata       String?
+  customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  consultation   Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  actor          User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([leadId, createdAt])
+}
+
+model AiConversation {
+  id             String       @id @default(uuid())
+  userId         String
+  consultationId String?
+  provider       String
+  model          String
+  status         String       @default("ACTIVE")
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consultation   Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  messages       AiMessage[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([consultationId])
+}
+
+model AiMessage {
+  id                 String         @id @default(uuid())
+  conversationId     String
+  role               String
+  content            String
+  inputTokens        Int?
+  outputTokens       Int?
+  redactionApplied   Boolean        @default(false)
+  conversation       AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime       @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model KnowledgeArticle {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  title       String
+  category    String
+  body        String
+  sourceUrl   String?
+  isPublished Boolean   @default(false)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([category, isPublished])
+}
+
+model RegulatorySource {
+  id           String    @id @default(uuid())
+  name         String
+  url          String    @unique
+  regulator    String?
+  lastCheckedAt DateTime?
+  reviewDueAt  DateTime?
+  notes        String?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([reviewDueAt])
+}
+
+model DocumentMetadata {
+  id              String    @id @default(uuid())
+  customerId      String
+  uploadedById    String?
+  documentType    String
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  storageKey      String    @unique
+  checksum        String?
+  retentionUntil  DateTime?
+  deletedAt       DateTime?
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([customerId, documentType])
+  @@index([retentionUntil])
+}
+
+model AppSetting {
+  id              String    @id @default(uuid())
+  key             String    @unique
+  value           String?
+  encryptedValue  String?
+  isSecret        Boolean   @default(false)
+  updatedById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String?
+  action       String
+  resource     String
+  resourceId   String?
+  metadata     String?
+  ipAddress    String?
+  userAgent    String?
+  actor        User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([resource, resourceId, createdAt])
+}

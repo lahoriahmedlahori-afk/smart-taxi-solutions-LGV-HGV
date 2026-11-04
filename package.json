@@ -1,0 +1,35 @@
+{
+  "name": "smart-taxi-solutions-adviser",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:ui": "vite --host 0.0.0.0",
+    "dev:api": "node --watch server/index.js",
+    "start": "node server/index.js",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "db:dev": "node scripts/database-setup.mjs",
+    "db:generate:postgres": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:seed:roles": "node scripts/seed-roles.mjs",
+    "admin:create": "node scripts/create-admin.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3",
+    "vite": "^8.3.5"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.3",
+    "helmet": "^8.3.0",
+    "zod": "^4.6.7"
+  }
+}

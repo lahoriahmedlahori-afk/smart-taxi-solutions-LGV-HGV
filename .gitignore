@@ -1,0 +1,9 @@
+node_modules/
+dist/
+server/generated/
+prisma/dev.db
+prisma/dev.db-journal
+prisma/schema.dev.prisma
+.env
+.env.*
+!.env.example
